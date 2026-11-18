@@ -1,0 +1,988 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f3ed">
+  <title>数字迷宫</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #202c29;
+      --muted: #78827b;
+      --paper: #f5f3ed;
+      --panel: #fffefa;
+      --line: #e7e5dc;
+      --green: #2f775c;
+      --green-dark: #245c47;
+      --green-pale: #e6f0e9;
+      --gold: #d7a64d;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse at 9% 6%, rgba(226, 232, 214, .55), transparent 28rem),
+        var(--paper);
+    }
+
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+
+    .page {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 38px 0 42px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 26px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 13px; }
+    .brand-mark {
+      display: grid;
+      width: 44px;
+      height: 44px;
+      place-items: center;
+      border-radius: 14px;
+      color: white;
+      background: var(--green);
+      box-shadow: 0 6px 14px rgba(47, 119, 92, .18);
+      font-size: 22px;
+      font-weight: 800;
+    }
+    .brand-name { margin: 0; font-size: 18px; letter-spacing: .04em; }
+    .brand-subtitle { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+    .top-note { color: var(--muted); font-size: 13px; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 290px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .board-card, .side-card {
+      border: 1px solid rgba(222, 220, 210, .9);
+      border-radius: 20px;
+      background: var(--panel);
+      box-shadow: 0 12px 35px rgba(48, 52, 43, .055);
+    }
+
+    .board-card { padding: 25px; }
+    .board-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 17px;
+    }
+    .board-heading h2 { margin: 0; font-size: 17px; }
+    .board-heading p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 12px; color: var(--muted); font-size: 11px; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend i { width: 9px; height: 9px; border-radius: 50%; background: var(--green); }
+    .legend .legend-end { background: var(--gold); }
+
+    .board-wrap {
+      display: grid;
+      min-height: 390px;
+      place-items: center;
+      padding: 12px;
+      border: 1px solid #eeece4;
+      border-radius: 15px;
+      background-color: #faf9f5;
+      background-image: radial-gradient(#e9e7df .75px, transparent .75px);
+      background-size: 13px 13px;
+      overflow: auto;
+    }
+
+    .board {
+      position: relative;
+      display: grid;
+      width: min(100%, 590px);
+      aspect-ratio: 1;
+      gap: clamp(2px, .55vw, 6px);
+      touch-action: none;
+      user-select: none;
+    }
+
+    .answer-line-overlay {
+      position: absolute;
+      z-index: 3;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .answer-line-halo, .player-line-halo {
+      fill: none;
+      stroke: rgba(255, 255, 255, .9);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 9px;
+    }
+
+    .answer-line {
+      fill: none;
+      stroke: #2f775c;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 4px;
+      filter: drop-shadow(0 1px 2px rgba(24, 64, 46, .22));
+    }
+
+    .player-line {
+      fill: none;
+      stroke: #5278b8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 4px;
+      filter: drop-shadow(0 1px 2px rgba(34, 57, 100, .24));
+    }
+
+    .answer-point { fill: #2f775c; stroke: white; stroke-width: 2px; }
+    .answer-point.finish { fill: #d7a64d; }
+
+    .cell {
+      position: relative;
+      display: grid;
+      min-width: 0;
+      min-height: 0;
+      place-items: center;
+      border: 1px solid #e8e6de;
+      border-radius: clamp(4px, .7vw, 9px);
+      color: #53605a;
+      background: #fffefa;
+      font-size: clamp(10px, 1.55vw, 16px);
+      font-weight: 650;
+      font-variant-numeric: tabular-nums;
+      transition: background .12s, color .12s, border-color .12s, transform .12s;
+      cursor: pointer;
+    }
+
+    .cell-value { position: relative; z-index: 4; }
+
+    .cell:hover { border-color: #a9c4b1; transform: translateY(-1px); }
+    .cell.visited { border-color: #c9ddcd; color: var(--green-dark); background: #dcebdd; }
+    .cell.current { outline: 2px solid var(--green); outline-offset: 1px; }
+    .cell.start, .cell.finish { color: white; border-color: transparent; background: var(--green); }
+    .cell.finish { background: var(--gold); }
+    .cell.answer:not(.visited) { color: var(--green-dark); border-color: #75a885; background: #edf5eb; }
+    .cell.wrong { animation: nudge .22s ease-in-out; }
+    .cell.start::after, .cell.finish::after {
+      position: absolute;
+      top: 2px;
+      right: 3px;
+      font-size: clamp(7px, .8vw, 9px);
+      font-weight: 700;
+      opacity: .8;
+    }
+    .cell.start::after { content: "起"; }
+    .cell.finish::after { content: "终"; }
+
+    @keyframes nudge {
+      25% { transform: translateX(-3px); }
+      75% { transform: translateX(3px); }
+    }
+
+    .board-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 15px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .board-footer strong { color: var(--green-dark); font-weight: 650; }
+
+    .sidebar { display: grid; gap: 16px; }
+    .side-card { padding: 20px; }
+    .side-card h3 { margin: 0 0 16px; font-size: 14px; }
+
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat {
+      padding: 12px 13px;
+      border-radius: 12px;
+      background: #f6f5ef;
+    }
+    .stat-label { color: var(--muted); font-size: 11px; }
+    .stat-value { margin-top: 6px; font-size: 21px; font-weight: 720; font-variant-numeric: tabular-nums; }
+    .stat-value small { color: var(--muted); font-size: 11px; font-weight: 500; }
+
+    .settings { display: grid; gap: 13px; }
+    .setting-row { display: grid; grid-template-columns: 1fr 92px; align-items: center; gap: 12px; }
+    .setting-row label { font-size: 12px; font-weight: 600; }
+    .setting-row .hint { margin-top: 3px; color: var(--muted); font-size: 10px; }
+    .setting-row input {
+      width: 100%;
+      height: 36px;
+      padding: 0 9px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      outline: none;
+      color: var(--ink);
+      background: #fff;
+    }
+    .setting-row input:focus { border-color: #79a58a; box-shadow: 0 0 0 3px rgba(47, 119, 92, .1); }
+
+    .actions { display: grid; gap: 9px; margin-top: 17px; }
+    .button {
+      display: inline-flex;
+      min-height: 41px;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 0 14px;
+      border: 1px solid transparent;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      transition: background .15s, transform .15s;
+    }
+    .button:hover { transform: translateY(-1px); }
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: .48;
+      transform: none;
+    }
+    .button-primary { color: white; background: var(--green); }
+    .button-primary:hover { background: var(--green-dark); }
+    .button-secondary { border-color: var(--line); color: var(--ink); background: #fff; }
+    .button-secondary:hover { background: #f6f5ef; }
+    .button.is-active { color: var(--green-dark); border-color: #c6ddcb; background: var(--green-pale); }
+
+    .message {
+      display: none;
+      margin-top: 13px;
+      padding: 11px 12px;
+      border-radius: 10px;
+      color: var(--green-dark);
+      background: var(--green-pale);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .message.visible { display: block; }
+    .message.win { color: #684b17; background: #fbf1d9; }
+
+    .rule-list { display: grid; gap: 11px; margin: 0; padding: 0; list-style: none; }
+    .rule-list li { display: grid; grid-template-columns: 24px 1fr; gap: 9px; align-items: start; color: #59645d; font-size: 11px; line-height: 1.55; }
+    .rule-icon {
+      display: grid;
+      width: 23px;
+      height: 23px;
+      place-items: center;
+      border-radius: 7px;
+      color: var(--green-dark);
+      background: var(--green-pale);
+      font-size: 11px;
+      font-weight: 750;
+    }
+    .rule-list strong { color: var(--ink); }
+    .footer-note { margin: 18px 0 0; color: #939990; text-align: center; font-size: 10px; }
+
+    @media (max-width: 780px) {
+      .page { width: min(100% - 24px, 620px); padding-top: 22px; }
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { grid-template-columns: 1fr 1fr; }
+      .board-wrap { min-height: 0; }
+      .board { width: min(100%, 560px); }
+      .top-note { display: none; }
+    }
+
+    @media (max-width: 520px) {
+      .board-card { padding: 15px; }
+      .board-heading { align-items: flex-start; }
+      .legend { justify-content: flex-end; gap: 8px; }
+      .sidebar { grid-template-columns: 1fr; }
+      .board-footer { font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">#</div>
+        <div>
+          <h1 class="brand-name">数字迷宫</h1>
+          <p class="brand-subtitle">沿着公因数，找到出口</p>
+        </div>
+      </div>
+      <div class="top-note">观察数字之间的联系，规划你的通路</div>
+    </header>
+
+    <div class="layout">
+      <section class="board-card" aria-label="数字迷宫盘面">
+        <div class="board-heading">
+          <div>
+            <h2>迷宫盘面</h2>
+            <p>从左上角出发，抵达右下角</p>
+          </div>
+          <div class="legend" aria-label="起点终点说明">
+            <span><i></i> 起点</span>
+            <span><i class="legend-end"></i> 终点</span>
+          </div>
+        </div>
+        <div class="board-wrap">
+          <div id="board" class="board" role="grid" aria-label="数字迷宫"></div>
+        </div>
+        <div class="board-footer">
+          <span>已走 <strong id="step-count">0</strong> 步</span>
+          <span>相邻格需有大于 1 的公因数</span>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="side-card">
+          <h3>本局状态</h3>
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-label">用时</div>
+              <div class="stat-value" id="timer">00:00</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">迷宫尺寸</div>
+              <div class="stat-value"><span id="size-label">8</span><small> × <span id="size-label-2">8</span></small></div>
+            </div>
+          </div>
+          <div id="message" class="message" role="status" aria-live="polite"></div>
+        </section>
+
+        <section class="side-card">
+          <h3>迷宫设置</h3>
+          <div class="settings">
+            <div class="setting-row">
+              <div><label for="size-input">宫格边长</label><div class="hint">6 至 15 格</div></div>
+              <input id="size-input" type="number" min="6" max="15" value="8">
+            </div>
+            <div class="setting-row">
+              <div><label for="min-input">数字下限</label><div class="hint">数字范围为 2 至 10000</div></div>
+              <input id="min-input" type="number" min="2" max="10000" value="2">
+            </div>
+            <div class="setting-row">
+              <div><label for="max-input">数字上限</label><div class="hint">需大于或等于下限</div></div>
+              <input id="max-input" type="number" min="2" max="10000" value="100">
+            </div>
+          </div>
+          <div class="actions">
+            <button id="new-game" class="button button-primary" type="button">↻　生成新迷宫</button>
+            <button id="undo-game" class="button button-secondary" type="button" disabled>撤销一步</button>
+            <button id="submit-game" class="button button-secondary" type="button" disabled>提交路线</button>
+            <button id="reset-game" class="button button-secondary" type="button">重置盘面</button>
+            <button id="answer-button" class="button button-secondary" type="button" aria-pressed="false">显示答案</button>
+          </div>
+        </section>
+
+        <section class="side-card">
+          <h3>游戏规则</h3>
+          <ul class="rule-list">
+            <li><span class="rule-icon">1</span><span>从左上角 <strong>起点</strong> 出发，走到右下角终点。</span></li>
+            <li><span class="rule-icon">8</span><span>移动时可先尝试周围八格；提交路线时，系统会检查相邻数字是否有<strong>大于 1 的公因数</strong>。</span></li>
+            <li><span class="rule-icon">↗</span><span>点击或拖动行走，到达终点后提交；路线错误会清空行进记录，可在同一盘面重新作答。</span></li>
+          </ul>
+        </section>
+      </aside>
+    </div>
+    <p class="footer-note">提示：每局都有可行通路，仔细观察相邻数字的公因数。</p>
+  </main>
+
+  <script>
+    (() => {
+      const boardElement = document.getElementById("board");
+      const sizeInput = document.getElementById("size-input");
+      const minInput = document.getElementById("min-input");
+      const maxInput = document.getElementById("max-input");
+      const timerElement = document.getElementById("timer");
+      const stepElement = document.getElementById("step-count");
+      const messageElement = document.getElementById("message");
+      const answerButton = document.getElementById("answer-button");
+      const undoButton = document.getElementById("undo-game");
+      const submitButton = document.getElementById("submit-game");
+      const sizeLabel = document.getElementById("size-label");
+      const sizeLabel2 = document.getElementById("size-label-2");
+
+      let size = 8;
+      let minNumber = 2;
+      let maxNumber = 100;
+      let route = [];
+      let values = [];
+      let visited = [];
+      let undoHistory = [];
+      let answerVisible = false;
+      let dragging = false;
+      let startedAt = null;
+      let timerId = null;
+      let finished = false;
+
+      const directions = [
+        [-1, -1], [-1, 0], [-1, 1],
+        [0, -1],             [0, 1],
+        [1, -1],  [1, 0],  [1, 1]
+      ];
+
+      function gcd(a, b) {
+        while (b !== 0) [a, b] = [b, a % b];
+        return a;
+      }
+
+      function neighbors(index) {
+        const row = Math.floor(index / size);
+        const col = index % size;
+        const result = [];
+        for (const [dr, dc] of directions) {
+          const r = row + dr;
+          const c = col + dc;
+          if (r >= 0 && r < size && c >= 0 && c < size) result.push(r * size + c);
+        }
+        return result;
+      }
+
+      function shuffled(items) {
+        for (let i = items.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [items[i], items[j]] = [items[j], items[i]];
+        }
+        return items;
+      }
+
+      function crossesExistingPath(from, to, path) {
+        const fromRow = Math.floor(from / size);
+        const fromCol = from % size;
+        const toRow = Math.floor(to / size);
+        const toCol = to % size;
+        if (Math.abs(fromRow - toRow) !== 1 || Math.abs(fromCol - toCol) !== 1) return false;
+        const squareRow = Math.min(fromRow, toRow);
+        const squareCol = Math.min(fromCol, toCol);
+        const direction = (fromRow - toRow) * (fromCol - toCol);
+
+        for (let i = 1; i < path.length; i++) {
+          const previousRow = Math.floor(path[i - 1] / size);
+          const previousCol = path[i - 1] % size;
+          const currentRow = Math.floor(path[i] / size);
+          const currentCol = path[i] % size;
+          if (
+            Math.abs(previousRow - currentRow) === 1 &&
+            Math.abs(previousCol - currentCol) === 1 &&
+            Math.min(previousRow, currentRow) === squareRow &&
+            Math.min(previousCol, currentCol) === squareCol &&
+            (previousRow - currentRow) * (previousCol - currentCol) !== direction
+          ) return true;
+        }
+        return false;
+      }
+
+      function findRoute() {
+        const start = 0;
+        const end = size * size - 1;
+        const targetSteps = size >= 7 ? Math.max(20, size * 2) : size * 2;
+        const budgetPerAttempt = size * size * 70;
+
+        for (let attempt = 0; attempt < 10; attempt++) {
+          const path = [start];
+          const inPath = new Set(path);
+          let explored = 0;
+
+          function search(current) {
+            if (current === end) return path.length - 1 >= targetSteps;
+            if (++explored > budgetPerAttempt) return false;
+
+            const candidates = shuffled(neighbors(current).filter((candidate) => {
+              if (inPath.has(candidate)) return false;
+              if (candidate === end && path.length - 1 < targetSteps) return false;
+              if (crossesExistingPath(current, candidate, path)) return false;
+              return true;
+            })).map((index) => {
+              const row = Math.floor(index / size);
+              const col = index % size;
+              const distance = Math.max(size - 1 - row, size - 1 - col);
+              const onwardMoves = neighbors(index).filter((next) => !inPath.has(next) && next !== index).length;
+              const exploring = path.length - 1 < targetSteps;
+              const score = exploring
+                ? onwardMoves * 2 + distance * 0.3 + Math.random() * 2
+                : -distance * 2 + onwardMoves * 0.2 + Math.random() * 2;
+              return { index, score };
+            }).sort((a, b) => b.score - a.score);
+
+            for (const { index: candidate } of candidates) {
+              path.push(candidate);
+              inPath.add(candidate);
+              if (search(candidate)) return true;
+              inPath.delete(candidate);
+              path.pop();
+            }
+            return false;
+          }
+
+          if (search(start)) return path;
+        }
+
+        return fallbackRoute();
+      }
+
+      function fallbackRoute() {
+        const path = [];
+        for (let col = 0; col < size; col++) path.push(col);
+        path.push(size + size - 1);
+        for (let col = size - 1; col >= 0; col--) path.push(size * 2 + col);
+        path.push(size * 3);
+        for (let col = 0; col < size; col++) path.push(size * 4 + col);
+        for (let row = 5; row < size; row++) path.push(row * size + size - 1);
+        return path;
+      }
+
+      function primeFactors(max) {
+        const composite = new Uint8Array(max + 1);
+        const primes = [];
+        for (let candidate = 2; candidate <= max; candidate++) {
+          if (composite[candidate]) continue;
+          primes.push(candidate);
+          for (let multiple = candidate * candidate; multiple <= max; multiple += candidate) {
+            composite[multiple] = 1;
+          }
+        }
+        return primes;
+      }
+
+      function buildValues(path) {
+        if (path === null) return null;
+        const primes = primeFactors(maxNumber);
+        if (primes.length === 0) return null;
+
+        const targetSteps = path.length - 1;
+        const routeCells = new Set(path);
+        let bestBoard = null;
+        let fewestPaths = Infinity;
+        for (let attempt = 0; attempt < 240; attempt++) {
+          const edgeFactors = [];
+          for (let edge = 0; edge < targetSteps; edge++) {
+            const previous = edgeFactors[edge - 1];
+            const options = primes.filter((prime) =>
+              !previous || prime * previous <= maxNumber
+            );
+            if (options.length === 0) break;
+            const beforePrevious = edgeFactors[edge - 2];
+            const varied = options.filter((prime) => prime !== previous && prime !== beforePrevious);
+            const factor = shuffled(varied.length > 0 ? varied : options)[0];
+            edgeFactors.push(factor);
+          }
+          if (edgeFactors.length !== targetSteps) continue;
+
+          const routeValues = path.map((_, index) => {
+            const before = edgeFactors[index - 1];
+            const after = edgeFactors[index];
+            const required = before && after && before !== after ? before * after : before || after;
+            return Math.ceil(minNumber / required) * required;
+          });
+          if (routeValues.some((value) => value > maxNumber)) continue;
+          if (routeValues.some((value, index) =>
+            index > 0 && gcd(routeValues[index - 1], value) <= 1
+          )) continue;
+
+          const result = Array(size * size).fill(0);
+          path.forEach((cell, index) => { result[cell] = routeValues[index]; });
+          const assignmentOrder = shuffled(result.map((_, index) => index).filter((index) => !routeCells.has(index)));
+          const frequencies = new Map();
+          routeValues.forEach((value) => frequencies.set(value, (frequencies.get(value) || 0) + 1));
+
+          for (const cell of assignmentOrder) {
+            const assignedNeighbors = neighbors(cell).filter((neighbor) => result[neighbor] !== 0);
+            const sample = new Set([minNumber, maxNumber]);
+            for (let i = 0; i < 80; i++) {
+              sample.add(minNumber + Math.floor(Math.random() * (maxNumber - minNumber + 1)));
+            }
+
+            let bestBaseScore = Infinity;
+            let bestCandidates = [];
+            for (const candidate of sample) {
+              const links = assignedNeighbors.reduce(
+                (count, neighbor) => count + (gcd(candidate, result[neighbor]) > 1 ? 1 : 0),
+                0
+              );
+              const baseScore = links * 100 + (frequencies.get(candidate) || 0) * 2;
+              if (baseScore < bestBaseScore) {
+                bestBaseScore = baseScore;
+                bestCandidates = [candidate];
+              } else if (baseScore === bestBaseScore) {
+                bestCandidates.push(candidate);
+              }
+            }
+
+            const value = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
+            result[cell] = value;
+            frequencies.set(value, (frequencies.get(value) || 0) + 1);
+          }
+
+          if (addDecoys(result, path, routeValues) < 3) continue;
+          const pathCount = countPaths(result, 24);
+          if (pathCount < fewestPaths) {
+            fewestPaths = pathCount;
+            bestBoard = result;
+          }
+          if (pathCount <= 8) return result;
+        }
+        return fewestPaths <= 12 ? bestBoard : null;
+      }
+
+      function addDecoys(numbers, path, routeValues) {
+        const routePositions = new Map(path.map((cell, index) => [cell, index]));
+        const candidates = shuffled(numbers.map((_, cell) => {
+          const routeNeighbors = neighbors(cell).filter((neighbor) => routePositions.has(neighbor));
+          if (routePositions.has(cell) || routeNeighbors.length !== 1) return null;
+          const routePosition = routePositions.get(routeNeighbors[0]);
+          if (routePosition === 0 || routePosition === path.length - 1) return null;
+          return { cell, routeCell: routeNeighbors[0], routePosition };
+        }).filter(Boolean));
+        const targetCount = Math.min(10, Math.max(4, size - 2));
+        const branchCounts = new Map();
+        let placed = 0;
+
+        for (const candidate of candidates) {
+          if (placed >= targetCount) break;
+          if ((branchCounts.get(candidate.routePosition) || 0) >= 2) continue;
+          const adjacent = neighbors(candidate.cell);
+          const targetValue = routeValues[candidate.routePosition];
+          const samples = new Set([minNumber, maxNumber, targetValue]);
+          for (let i = 0; i < 128; i++) {
+            samples.add(minNumber + Math.floor(Math.random() * (maxNumber - minNumber + 1)));
+          }
+          let validValues = [...samples].filter((value) =>
+            gcd(value, targetValue) > 1 &&
+            adjacent.every((neighbor) =>
+              neighbor === candidate.routeCell || gcd(value, numbers[neighbor]) === 1
+            )
+          );
+          if (validValues.length === 0) {
+            for (let value = minNumber; value <= maxNumber; value++) {
+              if (
+                gcd(value, targetValue) > 1 &&
+                adjacent.every((neighbor) =>
+                  neighbor === candidate.routeCell || gcd(value, numbers[neighbor]) === 1
+                )
+              ) {
+                validValues.push(value);
+                if (validValues.length === 8) break;
+              }
+            }
+          }
+          if (validValues.length === 0) continue;
+
+          numbers[candidate.cell] = validValues[Math.floor(Math.random() * validValues.length)];
+          branchCounts.set(candidate.routePosition, (branchCounts.get(candidate.routePosition) || 0) + 1);
+          placed++;
+        }
+        return placed;
+      }
+
+      function countPaths(numbers, limit) {
+        const goal = size * size - 1;
+        const inPath = new Set([0]);
+        let found = 0;
+        let explored = 0;
+
+        function search(current) {
+          if (current === goal) {
+            found++;
+            return;
+          }
+          if (++explored > 50000 || found > limit) return;
+          for (const next of neighbors(current)) {
+            if (!inPath.has(next) && gcd(numbers[current], numbers[next]) > 1) {
+              inPath.add(next);
+              search(next);
+              inPath.delete(next);
+              if (found > limit || explored > 50000) return;
+            }
+          }
+        }
+
+        search(0);
+        return explored > 50000 ? limit + 1 : found;
+      }
+
+      function drawAnswerLine() {
+        const existing = boardElement.querySelector(".answer-line-overlay");
+        const displayedPath = answerVisible ? route : visited;
+        if (displayedPath.length < 2) {
+          if (existing) existing.remove();
+          return;
+        }
+
+        const boardRect = boardElement.getBoundingClientRect();
+        if (boardRect.width === 0 || boardRect.height === 0) return;
+        const overlay = existing || document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        overlay.classList.add("answer-line-overlay");
+        overlay.setAttribute("viewBox", `0 0 ${boardRect.width} ${boardRect.height}`);
+        overlay.setAttribute("aria-hidden", "true");
+        overlay.replaceChildren();
+
+        const points = displayedPath.map((index) => {
+          const cellRect = boardElement.children[index].getBoundingClientRect();
+          return {
+            x: cellRect.left + cellRect.width / 2 - boardRect.left,
+            y: cellRect.top + cellRect.height / 2 - boardRect.top,
+            width: cellRect.width,
+            height: cellRect.height
+          };
+        });
+        for (let index = 1; index < points.length; index++) {
+          const from = points[index - 1];
+          const to = points[index];
+          const dx = to.x - from.x;
+          const dy = to.y - from.y;
+          const startScale = 1 / Math.max(Math.abs(dx) / (from.width / 2), Math.abs(dy) / (from.height / 2));
+          const endScale = 1 / Math.max(Math.abs(dx) / (to.width / 2), Math.abs(dy) / (to.height / 2));
+          const segment = (className) => {
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", String(from.x + dx * startScale));
+            line.setAttribute("y1", String(from.y + dy * startScale));
+            line.setAttribute("x2", String(to.x - dx * endScale));
+            line.setAttribute("y2", String(to.y - dy * endScale));
+            line.setAttribute("class", answerVisible
+              ? className
+              : className === "answer-line-halo" ? "player-line-halo" : "player-line");
+            return line;
+          };
+          overlay.append(segment("answer-line-halo"), segment("answer-line"));
+        }
+        if (!existing) boardElement.appendChild(overlay);
+      }
+
+      function makeBoard(nextSize = size, nextMin = minNumber, nextMax = maxNumber) {
+        const previousSize = size;
+        const previousMin = minNumber;
+        const previousMax = maxNumber;
+        size = nextSize;
+        minNumber = nextMin;
+        maxNumber = nextMax;
+        let nextRoute = findRoute();
+        let nextValues = buildValues(nextRoute);
+        if (nextValues === null) {
+          nextRoute = fallbackRoute();
+          nextValues = buildValues(nextRoute);
+        }
+        if (nextValues === null) {
+          size = previousSize;
+          minNumber = previousMin;
+          maxNumber = previousMax;
+          showMessage(nextRoute === null
+            ? "未能找到足够长的通路，请点击生成新迷宫重试。"
+            : "当前范围暂时无法生成合适盘面，请尝试扩大数字范围后重试。", false);
+          return false;
+        }
+        route = nextRoute;
+        values = nextValues;
+        visited = [route[0]];
+        undoHistory = [];
+        answerVisible = false;
+        dragging = false;
+        startedAt = null;
+        finished = false;
+        stopTimer();
+        timerElement.textContent = "00:00";
+        answerButton.classList.remove("is-active");
+        answerButton.setAttribute("aria-pressed", "false");
+        answerButton.textContent = "显示答案";
+        showMessage("", false);
+        sizeLabel.textContent = size;
+        sizeLabel2.textContent = size;
+        boardElement.style.gridTemplateColumns = `repeat(${size}, minmax(0, 1fr))`;
+        boardElement.replaceChildren();
+
+        values.forEach((value, index) => {
+          const cell = document.createElement("button");
+          cell.type = "button";
+          cell.className = "cell";
+          const valueLabel = document.createElement("span");
+          valueLabel.className = "cell-value";
+          valueLabel.textContent = value;
+          cell.appendChild(valueLabel);
+          cell.dataset.index = index;
+          cell.setAttribute("role", "gridcell");
+          cell.setAttribute("aria-label", `${Math.floor(index / size) + 1} 行 ${index % size + 1} 列，数字 ${value}`);
+          cell.addEventListener("pointerdown", (event) => {
+            if (event.button !== undefined && event.button !== 0) return;
+            dragging = true;
+            moveTo(index);
+          });
+          cell.addEventListener("pointerenter", () => {
+            if (dragging) moveTo(index);
+          });
+          cell.addEventListener("click", () => moveTo(index));
+          boardElement.appendChild(cell);
+        });
+        updateCells();
+        return true;
+      }
+
+      function updateCells() {
+        const visitedSet = new Set(visited);
+        const answerSet = answerVisible ? new Set(route) : new Set();
+        const current = visited[visited.length - 1];
+        [...boardElement.querySelectorAll(".cell")].forEach((cell, index) => {
+          cell.classList.toggle("visited", visitedSet.has(index));
+          cell.classList.toggle("current", index === current && !finished);
+          cell.classList.toggle("start", index === 0);
+          cell.classList.toggle("finish", index === size * size - 1);
+          cell.classList.toggle("answer", answerSet.has(index));
+        });
+        stepElement.textContent = Math.max(0, visited.length - 1);
+        undoButton.disabled = finished || undoHistory.length === 0;
+        submitButton.disabled = finished || current !== size * size - 1;
+        drawAnswerLine();
+      }
+
+      function moveTo(index) {
+        if (finished || visited.includes(index)) return;
+        const current = visited[visited.length - 1];
+        if (current === size * size - 1 || !neighbors(current).includes(index)) return;
+
+        if (answerVisible) {
+          answerVisible = false;
+          answerButton.classList.remove("is-active");
+          answerButton.setAttribute("aria-pressed", "false");
+          answerButton.textContent = "显示答案";
+        }
+        if (startedAt === null) {
+          startedAt = Date.now();
+          timerId = window.setInterval(updateTimer, 250);
+        }
+        visited.push(index);
+        undoHistory.push(index);
+        if (undoHistory.length > 5) undoHistory.shift();
+        showMessage("", false);
+        if (index === size * size - 1) {
+          showMessage("已抵达终点，请提交路线进行验证。", false);
+        }
+        updateCells();
+      }
+
+      function isRouteCorrect() {
+        if (visited[0] !== 0 || visited[visited.length - 1] !== size * size - 1) return false;
+        if (new Set(visited).size !== visited.length) return false;
+
+        for (let index = 1; index < visited.length; index++) {
+          const previous = visited[index - 1];
+          const current = visited[index];
+          if (!neighbors(previous).includes(current) || gcd(values[previous], values[current]) <= 1) return false;
+          if (crossesExistingPath(previous, current, visited.slice(0, index))) return false;
+        }
+        return true;
+      }
+
+      function submitRoute() {
+        if (visited[visited.length - 1] !== size * size - 1 || finished) return;
+        if (!isRouteCorrect()) {
+          visited = [route[0]];
+          undoHistory = [];
+          answerVisible = false;
+          answerButton.classList.remove("is-active");
+          answerButton.setAttribute("aria-pressed", "false");
+          answerButton.textContent = "显示答案";
+          showMessage("这条路线不正确，已保留当前盘面并清空行进记录，请再试一次。", false);
+          updateCells();
+          return;
+        }
+
+        updateTimer();
+        finished = true;
+        stopTimer();
+        showMessage(`恭喜你成功走出数字迷宫！本局用时 ${timerElement.textContent}，一共走了 ${visited.length - 1} 步。`, true);
+        updateCells();
+      }
+
+      function updateTimer() {
+        if (startedAt === null) return;
+        const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        const minutes = String(Math.floor(elapsed / 60)).padStart(2, "0");
+        const seconds = String(elapsed % 60).padStart(2, "0");
+        timerElement.textContent = `${minutes}:${seconds}`;
+      }
+
+      function stopTimer() {
+        if (timerId !== null) window.clearInterval(timerId);
+        timerId = null;
+      }
+
+      function showMessage(text, won) {
+        messageElement.textContent = text;
+        messageElement.classList.toggle("visible", Boolean(text));
+        messageElement.classList.toggle("win", Boolean(won));
+      }
+
+      function newGame() {
+        const requestedSize = Number.parseInt(sizeInput.value, 10);
+        const requestedMin = Number.parseInt(minInput.value, 10);
+        const requestedMax = Number.parseInt(maxInput.value, 10);
+        const nextSize = Math.min(15, Math.max(6, Number.isFinite(requestedSize) ? requestedSize : 8));
+        const nextMin = Math.min(10000, Math.max(2, Number.isFinite(requestedMin) ? requestedMin : 2));
+        const nextMax = Math.min(10000, Math.max(2, Number.isFinite(requestedMax) ? requestedMax : 100));
+        if (nextMin > nextMax) {
+          showMessage("数字下限不能大于数字上限，请调整范围后重试。", false);
+          return;
+        }
+        sizeInput.value = nextSize;
+        minInput.value = nextMin;
+        maxInput.value = nextMax;
+        makeBoard(nextSize, nextMin, nextMax);
+      }
+
+      function resetGame() {
+        visited = [route[0]];
+        undoHistory = [];
+        startedAt = null;
+        finished = false;
+        stopTimer();
+        timerElement.textContent = "00:00";
+        answerVisible = false;
+        answerButton.classList.remove("is-active");
+        answerButton.setAttribute("aria-pressed", "false");
+        answerButton.textContent = "显示答案";
+        showMessage("", false);
+        updateCells();
+      }
+
+      document.getElementById("new-game").addEventListener("click", newGame);
+      document.getElementById("reset-game").addEventListener("click", resetGame);
+      submitButton.addEventListener("click", submitRoute);
+      undoButton.addEventListener("click", () => {
+        if (undoHistory.length === 0 || visited.length <= 1) return;
+        undoHistory.pop();
+        visited.pop();
+        showMessage("", false);
+        if (finished) {
+          finished = false;
+          if (startedAt !== null) timerId = window.setInterval(updateTimer, 250);
+        }
+        updateCells();
+      });
+      answerButton.addEventListener("click", () => {
+        answerVisible = !answerVisible;
+        answerButton.classList.toggle("is-active", answerVisible);
+        answerButton.setAttribute("aria-pressed", String(answerVisible));
+        answerButton.textContent = answerVisible ? "隐藏答案" : "显示答案";
+        updateCells();
+      });
+      window.addEventListener("pointerup", () => { dragging = false; });
+      window.addEventListener("pointercancel", () => { dragging = false; });
+      window.addEventListener("resize", drawAnswerLine);
+
+      makeBoard();
+    })();
+  </script>
+</body>
+</html>
